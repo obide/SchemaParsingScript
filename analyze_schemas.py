@@ -3,6 +3,8 @@
 #Portrays all table attributes of a specified schema
 #Check for Table Name, Type, Incremental, Query, Key, Columns with a Key
 #
+#TO DO: Add Column specifying data source / data file
+#
 # June 17, 2016 by 
 # NADIM SARRAS
 # ANAHIT SARAO
