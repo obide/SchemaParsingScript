@@ -1,19 +1,17 @@
 #! /usr/bin/env python
 
 #Portrays all table attributes of a specified schema
-#Check for Table Name, Type, Incremental, Query, Key, Columns with a Key
-#
-#TO DO: Add Column specifying data source / data file
+#Check for Table Name, Type, Incremental, Query, Data Source, Key, Columns with a Key
 #
 # June 17, 2016 by 
 # NADIM SARRAS
-# ANAHIT SARAO
+
 
 
 import sys, incorta, json as json, re as regex, xml.etree.ElementTree as xml; 
 
 DEBUG = False #Enable or disbale debug print statements
-SEPERATOR = "------------------------------------------------------------------------------------------------------------------------------"
+SEPERATOR = "----------------------------------------------------------------------------------------------------------------------------------------------------"
 
 """
 Function takes table input and parses table for pattern matching XML
@@ -30,15 +28,39 @@ def display_schema(session, schema):
 	schema_xml = xml.fromstring(r.content)
 	table_to_key_columns = which_table_has_key(schema_xml)
 	key_val = check_table_key(schema_xml)
+	table_sources = get_source_of_table(schema_xml)
 	for table in schema_xml.findall(".//datasets/*"):
 		inc = "incremental" in table.attrib and "true" == str(table.attrib["incremental"]).lower()
 		query_xml = table.find("queryUpdate")
 		correct_query = Q_REGEX.match(xml.tostring(query_xml)) if not query_xml is None else False
 		table_name = table.attrib['table']
 		table_has_key = table_to_key_columns.has_key(table_name.split('.')[1])
-		print ("{:<50} {:<10} {:<15} {:<20} {:<10} {:<20}" ).format(table_name, table.tag, \
-			"Yes" if inc else "No", "-" if not inc else "Yes" if correct_query else "No",
+		print ("{:<50} {:<5} {:<7} {:<10} {:<36} {:<5} {:<30}" ).format(table_name, table.tag, \
+			"Yes" if inc else "No", "-" if not inc else "Yes" if correct_query else "No", str(table_sources[table_name.split('.')[1]]), \
 			"Yes" if key_val[table_name.split('.')[1]] else "No", str(table_to_key_columns[table_name.split('.')[1]]) if table_has_key else "-")
+
+"""
+Parses through all tables within the schema. Extract the name of the 
+source per table. Append to the dictionary sources and return sources
+"""
+
+
+def get_source_of_table(schema_xml):
+	
+	sources = {}
+
+	try:
+		tables = schema_xml.find('schemaData').find('schema').find('tables')
+		tables = tables.findall('table')
+	except Exception, e:
+		return sources
+	for table in tables:
+		table_name = table.get('name')
+		origin = table.get('source')	
+		add_source_to_sourcelist(sources, table.get('name'), origin)
+	return sources
+
+
 
 """
 Parses through all tables within the schema. Within every table, all columns are traversed through 
@@ -106,8 +128,15 @@ def add_bool_to_key_list(table_to_columns_dict, table_name, key_bool_name):
 	else:
 		table_to_columns_dict[table_name] = key_bool_name
 
+"""
+Add source to sources dictionary 
+"""
 
-
+def add_source_to_sourcelist(table_to_columns_dict, table_name,source_name):
+	if table_to_columns_dict.has_key('table_name'):
+		table_to_columns_dict[table_name] = table_to_columns_dict[table_name].append(source_name)
+	else:
+		table_to_columns_dict[table_name] = source_name
 """
 Allows pattern matching for schema, print out header statement for print output
 	args:
@@ -128,8 +157,8 @@ def list_schemas(session, schema_list, schema_pattern):
 		if schema_pattern.match(schema_name) :
 			print " Schema ", schema_name
 			print (SEPERATOR)
-			print ("{:<50} {:<10} {:<15} {:<20} {:<10} {:<20}").format("Table name", "Type", \
-				"Incremental", "Query has (?)", "Key?", "Key Column Names")
+			print ("{:<49} {:<6} {:<5} {:<10} {:<36} {:<10} {:<30}").format("Table name", "Type", \
+				"Inc", "Query has(?)", "Data Source/File", "Key?", "Key Column Names")
 			print (SEPERATOR)
 			schema_found = True
 			display_schema(session, schema)

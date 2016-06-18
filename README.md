@@ -1,7 +1,7 @@
 # SchemaParsingScript
 
 #Portrays all table attributes of a specified schema
-#Check for Table Name, Type, Incremental, Query, Key, Columns with a Key
+#Check for Table Name, Type, Incremental, Query, Data Sources, Key, Columns with a Key
 
 Make sure to have file located in the directory of where Incorta is installed, within the bin folder.
 Example Path: /Users/User_Name/Incorta_Home/bin
@@ -9,8 +9,15 @@ Example Path: /Users/User_Name/Incorta_Home/bin
 
 
 To Run Script: 
+
+python file_name.py serverurl tenant_name username password schemapattern% true
+
+
+Example 
 python analyze_schemas.py http://dev01.incorta.com:8080/incorta development hsellami stanford123 % true
 
+
+More Information:
 You provide the server URL, tenant name, schema pattern, table pattern, column pattern, data type to change and to which value.
 
 The patterns works as normal SQL like statements (e.g. %_CODE will match all items with suffix _code). It applies to schemas, tables and columns. 
