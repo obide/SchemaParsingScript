@@ -16,6 +16,7 @@ python file_name.py serverurl tenant_name username password schemapattern% true
 Example 
 python analyze_schemas.py http://dev01.incorta.com:8080/incorta development hsellami stanford123 % true
 
+python analyze_schemas.py http://dev01.incorta.com:8080/incorta Demo super@incorta.com SuperPass123 %EBS_GL true
 
 More Information:
 You provide the server URL, tenant name, schema pattern, table pattern, column pattern, data type to change and to which value.

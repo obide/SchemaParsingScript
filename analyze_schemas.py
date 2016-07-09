@@ -11,7 +11,7 @@
 import sys, incorta, json as json, re as regex, xml.etree.ElementTree as xml; 
 
 DEBUG = False #Enable or disbale debug print statements
-SEPERATOR = "----------------------------------------------------------------------------------------------------------------------------------------------------"
+SEPERATOR = "-------------------------------------------------------------------------------------------------------------------------------------------------------------------"
 
 """
 Function takes table input and parses table for pattern matching XML
@@ -25,19 +25,61 @@ Function takes table input and parses table for pattern matching XML
 """
 def display_schema(session, schema):
 	r = incorta.get(session, "/service/schema/getSchema", {"schemaId": schema["id"]})
-	schema_xml = xml.fromstring(r.content)
-	table_to_key_columns = which_table_has_key(schema_xml)
-	key_val = check_table_key(schema_xml)
-	table_sources = get_source_of_table(schema_xml)
-	for table in schema_xml.findall(".//datasets/*"):
-		inc = "incremental" in table.attrib and "true" == str(table.attrib["incremental"]).lower()
-		query_xml = table.find("queryUpdate")
-		correct_query = Q_REGEX.match(xml.tostring(query_xml)) if not query_xml is None else False
-		table_name = table.attrib['table']
-		table_has_key = table_to_key_columns.has_key(table_name.split('.')[1])
-		print ("{:<50} {:<5} {:<7} {:<10} {:<36} {:<5} {:<30}" ).format(table_name, table.tag, \
-			"Yes" if inc else "No", "-" if not inc else "Yes" if correct_query else "No", str(table_sources[table_name.split('.')[1]]), \
-			"Yes" if key_val[table_name.split('.')[1]] else "No", str(table_to_key_columns[table_name.split('.')[1]]) if table_has_key else "-")
+	try:
+		schema_xml = xml.fromstring(r.content)
+		#print r.content
+		table_to_key_columns = which_table_has_key(schema_xml)
+		key_val = check_table_key(schema_xml)
+		table_sources = get_source_of_table(schema_xml)
+		extract_sources = get_extract_query_list(schema_xml)
+		counter = 0
+		for table in schema_xml.findall(".//datasets/*"):
+			inc = "incremental" in table.attrib and "true" == str(table.attrib["incremental"]).lower()
+			query_xml = table.find("queryUpdate")
+			correct_query = Q_REGEX.match(xml.tostring(query_xml)) if not query_xml is None else False
+			table_name = table.attrib['table']
+			table_has_key = table_to_key_columns.has_key(table_name.split('.')[1])
+			if counter == 0:
+				hold = 0
+				first = False
+				counter += 1
+			else:	
+				hold = counter - 1
+				first = True
+			print ("{:<51} {:<30} {:<5} {:<7} {:<10} {:<36} {:<5} {:<20}").format(table_name, extract_sources[hold:counter] if first else extract_sources[0], table.tag, \
+				"Yes" if inc else "No", "-" if not inc else "Yes" if correct_query else "No", str(table_sources[table_name.split('.')[1]]), \
+				"Yes" if key_val[table_name.split('.')[1]] else "No", str(table_to_key_columns[table_name.split('.')[1]]) if table_has_key else "-")
+			counter += 1
+	except Exception, e:
+		print "No data in schema"
+		return session
+
+
+def get_extract_query_list(schema_xml):
+
+	extract_list = []
+
+	try:
+		loads = schema_xml.find('schemaData').find('loader')
+		tables = loads.find('datasets')
+		tables = tables.findall('sql')
+	except Exception, e:
+		print "Nothing found"
+		return extract_list
+	
+	for table in tables:
+		x = table.find('query')
+		query = ''.join(x.itertext())
+
+		index = query.find('FROM')
+		if index == -1:
+			index =query.find('from')
+		span = index + 4
+		end_span = span + 20 
+		slicin = query[span:end_span]
+		extract_list.append(slicin)
+	return extract_list
+
 
 """
 Parses through all tables within the schema. Extract the name of the 
@@ -137,6 +179,19 @@ def add_source_to_sourcelist(table_to_columns_dict, table_name,source_name):
 		table_to_columns_dict[table_name] = table_to_columns_dict[table_name].append(source_name)
 	else:
 		table_to_columns_dict[table_name] = source_name
+
+"""
+Add extract query to extract dictionary 
+"""
+
+def add_query_to_extractlist(table_to_columns_dict, table_name, extract_name):
+	if table_to_columns_dict.has_key('table_name'):
+		table_to_columns_dict[table_name] = table_to_columns_dict[table_name].append(extract_name)
+	else:
+		table_to_columns_dict[table_name] = extract_name	
+
+
+
 """
 Allows pattern matching for schema, print out header statement for print output
 	args:
@@ -157,7 +212,7 @@ def list_schemas(session, schema_list, schema_pattern):
 		if schema_pattern.match(schema_name) :
 			print " Schema ", schema_name
 			print (SEPERATOR)
-			print ("{:<49} {:<6} {:<5} {:<10} {:<36} {:<10} {:<30}").format("Table name", "Type", \
+			print ("{:<51} {:<30} {:<4} {:<5} {:<10} {:<36} {:<5} {:<20}").format("Table name", "Extract", "Type", \
 				"Inc", "Query has(?)", "Data Source/File", "Key?", "Key Column Names")
 			print (SEPERATOR)
 			schema_found = True
