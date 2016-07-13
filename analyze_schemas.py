@@ -1,17 +1,26 @@
 #! /usr/bin/env python
 
 #Portrays all table attributes of a specified schema
-#Check for Table Name, Type, Incremental, Query, Data Source, Key, Columns with a Key
+#Check for Table Name, Extract Query Source, Type, Incremental, Query, Data Source, Key, Columns with a Key
 #
-# June 17, 2016 by 
+# July 12, 2016 by 
 # NADIM SARRAS
 
 
 
-import sys, incorta, json as json, re as regex, xml.etree.ElementTree as xml; 
+import csv, sys, incorta, json as json, re as regex, xml.etree.ElementTree as xml; 
 
-DEBUG = False #Enable or disbale debug print statements
-SEPERATOR = "-------------------------------------------------------------------------------------------------------------------------------------------------------------------"
+
+"""
+SCHEMAS [] contains a list of all schemas to be analyzed from the command line 
+Writes all schema information to a csv file 
+"""
+
+SCHEMAS = []
+f = open('schemas.csv', 'wt')
+writer = csv.writer(f)
+writer.writerow(('SCHEMA NAME', ' ', ' ', 'TABLE_INFORMATION '))
+writer.writerow((' ', 'TABLE_NAME', ' EXTRACT_QUERY_SOURCE', ' TYPE', ' INCREMENTAL', ' QUERY?', ' DATA SOURCE/FILE', ' KEY?', ' KEY_COLUMN_NAMES'))
 
 """
 Function takes table input and parses table for pattern matching XML
@@ -23,16 +32,18 @@ Function takes table input and parses table for pattern matching XML
 	prints:
 		Prints out the table with Table Name, Type, Incremental, Query, Key, Columns with a Key
 """
+
 def display_schema(session, schema):
 	r = incorta.get(session, "/service/schema/getSchema", {"schemaId": schema["id"]})
 	try:
 		schema_xml = xml.fromstring(r.content)
-		#print r.content
 		table_to_key_columns = which_table_has_key(schema_xml)
 		key_val = check_table_key(schema_xml)
 		table_sources = get_source_of_table(schema_xml)
 		extract_sources = get_extract_query_list(schema_xml)
 		counter = 0
+
+
 		for table in schema_xml.findall(".//datasets/*"):
 			inc = "incremental" in table.attrib and "true" == str(table.attrib["incremental"]).lower()
 			query_xml = table.find("queryUpdate")
@@ -46,14 +57,25 @@ def display_schema(session, schema):
 			else:	
 				hold = counter - 1
 				first = True
-			print ("{:<51} {:<30} {:<5} {:<7} {:<10} {:<36} {:<5} {:<20}").format(table_name, extract_sources[hold:counter] if first else extract_sources[0], table.tag, \
-				"Yes" if inc else "No", "-" if not inc else "Yes" if correct_query else "No", str(table_sources[table_name.split('.')[1]]), \
-				"Yes" if key_val[table_name.split('.')[1]] else "No", str(table_to_key_columns[table_name.split('.')[1]]) if table_has_key else "-")
+
+			try:
+				writer.writerow((' ',[table_name], extract_sources[hold] if first else extract_sources[0], table.tag, 'Yes' if inc else 'No', '-' if not inc else 'Yes' if correct_query else 'No', str(table_sources[table_name.split('.')[1]]), 'Yes' if key_val[table_name.split('.')[1]] else 'No', str(table_to_key_columns[table_name.split('.')[1]]) if table_has_key else '-'))
+			except Exception, e:
+				writer.writerow((' ',['Unable to read table']))
+				continue
+
 			counter += 1
+
 	except Exception, e:
-		print "No data in schema"
+		writer.writerow((' ',['No data in schema/tables']))
 		return session
 
+"""
+Function is used to extract the source from the query. It reads between the 'from' and 'where' (checks for both lower and upper case)
+Then splits by , into substrings
+The substrings are then split by space and the aliases are removed
+The stripped sources are joined together into a single string and pushed back into the list
+"""
 
 def get_extract_query_list(schema_xml):
 
@@ -64,20 +86,94 @@ def get_extract_query_list(schema_xml):
 		tables = loads.find('datasets')
 		tables = tables.findall('sql')
 	except Exception, e:
-		print "Nothing found"
+		writer.writerow((' ', ['No data in tables']))
 		return extract_list
 	
 	for table in tables:
 		x = table.find('query')
 		query = ''.join(x.itertext())
 
-		index = query.find('FROM')
-		if index == -1:
-			index =query.find('from')
-		span = index + 4
-		end_span = span + 20 
-		slicin = query[span:end_span]
-		extract_list.append(slicin)
+		try:
+			src = query.split("FROM ", 1)[1]
+			if "where" in src:
+				src = src.split("where", 1)[0]
+
+			elif "WHERE" in src:
+				src = src.split("WHERE", 1)[0]
+			#REMOVES ALIASES
+			if "," in src:
+
+				sub_list = []
+				src = src.replace('\n', ' ')
+				src1 = src.split(",")
+
+				#nested for loops
+				for y in range(len(src1)):
+
+					counter = 0
+					main_string = None
+					alias = None
+					compare =' '
+					new_strings = src1[y].split(" ")
+					new_size = len(new_strings)
+
+					for x in range(len(new_strings)):
+						if new_strings[x] in compare:
+							pass
+						else:
+							if counter == 0:
+								main_string = new_strings[x]
+								counter += 1
+								sub_list.append(main_string)
+							else:
+								alias = new_strings[x]
+
+				src = ', '.join(sub_list)
+
+			src = src.replace('\n', ' ')
+			extract_list.append(src)
+
+
+		except Exception, e:
+			src = query.split("from", 1)[1]
+			if "where" in src:
+				src = src.split("where", 1)[0]
+
+			elif "WHERE" in src:
+				src = src.split("WHERE", 1)[0]
+
+			if "," in src:
+
+				sub_list = []
+				src = src.replace('\n', ' ')
+				src1 = src.split(",")
+
+				#nested for loops
+				for y in range(len(src1)):
+
+					counter = 0
+					main_string = None
+					alias = None
+					compare =' '
+					new_strings = src1[y].split(" ")
+					new_size = len(new_strings)
+
+					for x in range(len(new_strings)):
+						if new_strings[x] in compare:
+							pass
+						else:
+							if counter == 0:
+								main_string = new_strings[x]
+								counter += 1
+								sub_list.append(main_string)
+							else:
+								alias = new_strings[x]
+
+				src = ', '.join(sub_list)
+
+			src = src.replace('\n', ' ')
+			extract_list.append(src)
+	
 	return extract_list
 
 
@@ -209,19 +305,17 @@ def list_schemas(session, schema_list, schema_pattern):
 	#loops through schema list and displays output
 	for schema in schema_list:
 		schema_name = schema["name"]
+		#SCHEMAS.append(schema_name)
 		if schema_pattern.match(schema_name) :
-			print " Schema ", schema_name
-			print (SEPERATOR)
-			print ("{:<51} {:<30} {:<4} {:<5} {:<10} {:<36} {:<5} {:<20}").format("Table name", "Extract", "Type", \
-				"Inc", "Query has(?)", "Data Source/File", "Key?", "Key Column Names")
-			print (SEPERATOR)
 			schema_found = True
+			writer.writerow((' '))
+			writer.writerow(([schema_name]))
 			display_schema(session, schema)
-			print (SEPERATOR+"\n")
 	if not schema_found:
 		print ("WARNNING: Could not find schemas matching your criteria, please "
 		"try '%' if you want to include all schemas.")
-
+	f.close()
+print "Data exported to schemas.csv"
 if len(sys.argv) < 5 :
 	print ("Invalid arguments are: server tenant user pass schema_pattern")
 	print ("example:")

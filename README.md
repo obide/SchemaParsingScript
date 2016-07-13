@@ -1,6 +1,6 @@
 # SchemaParsingScript
 
-#Portrays all table attributes of a specified schema
+#Portrays all table attributes of a specified schema to a CSV FILE
 #Check for Table Name, Type, Incremental, Query, Data Sources, Key, Columns with a Key
 
 Make sure to have file located in the directory of where Incorta is installed, within the bin folder.
@@ -25,3 +25,6 @@ The patterns works as normal SQL like statements (e.g. %_CODE will match all ite
 You may use %Schema_Name to select all schemas with the given name. 
 
 There's an optional last parameter (value true) to change the matching column to dimension.
+
+
+After running the script open the csv file generated with numbers or excel to view your results!
